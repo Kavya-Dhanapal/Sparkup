@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sparh-Up — SIH Prototype</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-o9N1j7kQMf0p6kA6Yw3g1w5oCkHc1b9gY1f8q+v0kQo=" crossorigin="" />
+  <style>
+    :root{
+      --bg:#f6f8fb; --card:#fff; --accent:#0f6cff; --danger:#e63946; --success:#2a9d8f; --muted:#6b7280;
+      --maxw:1100px;
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0; background:var(--bg); color:#0f172a}
+    header{background:linear-gradient(90deg,#0f6cff22,#2dd4bf11); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e6eef8}
+    header .brand{display:flex; gap:12px; align-items:center}
+    header h1{font-size:18px;margin:0}
+    header .controls{display:flex; gap:10px; align-items:center}
+    .container{max-width:var(--maxw); margin:20px auto; padding:0 16px}
+    .page{display:none}
+    .page.active{display:block}
+    .auth-card{background:var(--card); padding:20px; border-radius:12px; box-shadow:0 6px 18px rgba(12,18,31,0.06); max-width:420px; margin:40px auto}
+    .auth-card h2{margin-top:0}
+    .field{margin:10px 0}
+    .field label{display:block; font-size:13px; color:var(--muted)}
+    .field input, .field select, .field textarea{width:100%; padding:10px; border-radius:8px; border:1px solid #dbe7fb; font-family:inherit}
+    .btn{background:var(--accent); color:#ffffff; padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-size:14px}
+    .btn.secondary{background:#fff; border:1px solid #e6eef8; color:#0f172a}
+    .btn.small{padding:6px 10px; font-size:12px; border-radius:6px}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px}
+    .tile{background:var(--card); padding:18px; border-radius:12px; box-shadow:0 6px 18px rgba(12,18,31,0.04); cursor:pointer}
+    .tile h3{margin:0 0 8px 0}
+    .quick{display:flex; gap:10px}
+    .modules-list{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px}
+    .module-card{padding:14px; background:var(--card); border-radius:10px}
+    .module-card h4{margin:0}
+    .kb-list{display:grid; gap:10px}
+    .kb-item{background:var(--card); padding:12px; border-radius:10px}
+    .question{background:var(--card); padding:12px; border-radius:10px; margin-bottom:8px}
+    #gameCanvas{background:linear-gradient(#def, #bde); width:100%; height:400px; display:block; border-radius:8px}
+    #map{height:420px; border-radius:8px; border:1px solid #e6eef8}
+    .progress-bar{height:14px; background:#e6eef8; border-radius:12px; overflow:hidden}
+    .progress-bar > span{display:block; height:100%; background:linear-gradient(90deg,var(--accent),#06b6d4)}
+    .toasts{position:fixed; right:18px; bottom:18px; z-index:9999; display:flex; flex-direction:column; gap:8px}
+    .toast{background:#ff9800; padding:10px 12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.15)}
+    /* Quiz-only notifications */
+
+
+    .student-card{background:var(--card);padding:12px;border-radius:10px; margin-bottom:10px}
+    footer{padding:18px; text-align:center; color:var(--muted)}
+    @media (max-width:520px){ header h1{font-size:14px} }
+    .video-container {
+    display: flex; /* Aligns videos in a row */
+    gap: 20px; /* Optional: Adds space between the videos */
+    justify-content: center; /* Optional: Centers the videos within the container */
+  }
+
+/* Optional: Add styles to make videos responsive */
+  .video-container video {
+  max-width: 30%;
+  height: auto;
+  }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="6" fill="#0f6cff"/><path d="M6 13l3 3 9-9" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>
+        <h1>Disaster EDU — Prototype</h1>
+        <div style="font-size:12px;color:var(--muted)">Learn · Prepare · Respond</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div id="loggedAs" style="font-size:13px;color:var(--muted)"></div>
+      <button id="logoutBtn" class="btn secondary" style="display:none">Logout</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="page-login" class="page active">
+      <div class="auth-card">
+        <h2 id="authTitle">Login</h2>
+        <form id="authForm">
+          <div class="field"><label>Email</label><input type="email" id="email" required /></div>
+          <div class="field" id="nameField" style="display:none"><label>Full name</label><input id="fullname" /></div>
+          <div class="field"><label>Password</label><input type="password" id="password" required /></div>
+          <div class="field" id="roleField" style="display:none"><label>Role</label>
+            <select id="role"><option value="student">Student</option><option value="teacher">Teacher</option></select></div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn" type="submit">Continue</button>
+            <button class="btn secondary" type="button" id="toggleAuth">Switch to Register</button>
+          </div>
+        </form>
+        <p style="font-size:13px;color:var(--muted);margin-top:12px">This prototype stores data locally in your browser (localStorage). Use any email to register.</p>
+      </div>
+    </section>
+
+    <section id="page-dashboard" class="page">
+      <h2>Dashboard</h2>
+      <div class="grid">
+        <div class="tile" data-nav="modules"><h3>Modules</h3><div class="quick">Learn about disasters & protocols</div></div>
+        <div class="tile" data-nav="quiz"><h3>Quizzes</h3><div class="quick">Test your knowledge</div></div>
+        <div class="tile" data-nav="game"><h3>Survival Game</h3><div class="quick">Practice with a simulation</div></div>
+        <div class="tile" data-nav="knowledge"><h3>Knowledge Base</h3><div class="quick">Guides, checklists & posters</div></div>
+        <div class="tile" data-nav="map"><h3>Map & Panic</h3><div class="quick">Locate shelters / send help</div></div>
+        <div class="tile" data-nav="profile"><h3>Profile</h3><div class="quick">Progress, badges & settings</div></div>
+      </div>
+      <section style="margin-top:18px">
+        <h3>Quick progress</h3>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div style="flex:1"><div class="progress-bar"><span id="progressFill" style="width:0%"></span></div></div>
+          <div style="width:80px;text-align:right;color:var(--muted)" id="progressText">0%</div>
+        </div>
+      </section>
+    </section>
+
+    <section id="page-teacher-dashboard" class="page">
+        <h2>Teacher Dashboard</h2>
+        <div style="background:var(--card);padding:12px;border-radius:10px; margin-bottom:14px;">
+            <h4>Send Alert to Students</h4>
+            <div class="field"><textarea id="teacherAlertMsg" rows="2" placeholder="e.g., Heavy rainfall expected. Evacuate to higher ground."></textarea></div>
+            <button class="btn" id="sendAlertBtn">Send Notification</button>
+        </div>
+        <h3>Student Progress & Tracking</h3>
+        <div id="studentList"></div>
+    </section>
+
+
+    <section id="page-modules" class="page">
+      <h2>Learning Modules</h2>
+      <div class="modules-list" id="modulesList"></div>
+      <div id="moduleDetail" style="margin-top:14px"></div>
+      <section>
+       <h2> "Plan, Prepare, Prevail"</h2>
+       <iframe width="560" height="315" src="https://www.youtube.com/embed/AF_VZEggxzk?si=llbuNd56C_smSEIp" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+       <iframe width="560" height="315" src="https://www.youtube.com/embed/6Iwi7iUzkLI?si=5oSvDDou8_0HqXS1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+       <iframe width="560" height="315" src="https://www.youtube.com/embed/qDqGtXXWGgg?si=rVh-CsFE1knxUlJz" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+    
+    </section>
+    </section>
+
+    <section id="page-knowledge" class="page">
+      <h2>Knowledge Base</h2>
+      <div style="display:flex;gap:10px;margin-bottom:8px"><input id="kbSearch" placeholder="Search articles..." style="flex:1;padding:10px;border-radius:8px;border:1px solid #dbe7fb" /><button class="btn" id="downloadPoster">Download Safety Poster</button></div>
+      <div class="kb-list" id="kbList"></div>
+    </section>
+
+    <section id="page-quiz" class="page">
+      <h2>Quick Quiz</h2>
+      <div id="quizArea"></div>
+    </section>
+
+    <section id="page-game" class="page">
+      <h2>Mini Survival Game</h2>
+      <p style="color:var(--muted)">Use arrow keys to move to the green safe zone. Avoid falling debris. Reach the safe zone before time runs out.</p>
+      <canvas id="gameCanvas"></canvas>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" id="startGame">Start</button><div id="gameInfo" style="align-self:center;color:var(--muted)"></div></div>
+    </section>
+
+  <section id="page-map" class="page">
+      <h2>🗺️ Map & Panic Button</h2>
+      <p style="color:var(--muted); margin-bottom:15px">
+        Green markers = safe shelters. Your location = blue.  
+        Use Panic to simulate sending an alert with your location.
+      </p>
+
+      <div style="display:flex; gap:12px; justify-content:center; margin-bottom:12px;">
+        <button class="btn" id="locateBtn"><a href="vvv.html"> Locate Me</a></button>
+        <button class="btn" id="panicBtn" style="background:var(--danger)">🚨 Panic Alert</button>
+      </div>
+
+      <div id="map"></div>
+    </section>
+
+    <section id="page-profile" class="page">
+      <h2>Your Profile</h2>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px;background:var(--card);padding:12px;border-radius:10px">
+          <h3 id="profileName">Name</h3>
+          <div id="profileEmail" style="color:var(--muted)"></div>
+          <div style="margin-top:10px"><strong>Role:</strong> <span id="profileRole"></span></div>
+          <div style="margin-top:10px"><strong>Badges</strong><div id="badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div></div>
+        </div>
+        <div style="flex:1;min-width:260px;background:var(--card);padding:12px;border-radius:10px">
+          <h4>Overall readiness</h4>
+          <div class="progress-bar"><span id="profileProgress" style="width:0%"></span></div>
+          <div style="margin-top:10px;color:var(--muted)" id="profileScoreText">0% ready</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts"></div>
+  <footer><small>Prototype for SIH 2025 — Disaster Education & Response System</small></footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j7kQMf0p6kA6Yw3g1w5oCkHc1b9gY1f8q+v0kQo=" crossorigin=""></script>
+
+  <script>
+  (function(){
+    /* ---------- SAMPLE DATA (ENHANCED) ---------- */
+    const MODULES = [
+      {id:'earthquake', title:'Earthquake Safety', summary:'What to do before, during and after an earthquake.', content:{
+          before:'<h4>Before an Earthquake</h4><ul><li>Secure heavy items like bookshelves and mirrors to walls.</li><li>Create a family emergency plan and communication plan.</li><li>Prepare an emergency kit with food, water, and first aid supplies.</li><li>Identify safe spots in each room (e.g., under a sturdy table).</li></ul>',
+          during:'<h4>During an Earthquake</h4><p>If you are indoors, <strong>Drop, Cover, and Hold On</strong>. Stay away from windows, and anything that could fall on you. Do not use elevators.</p><p>If you are outdoors, move to an open area away from buildings, trees, and power lines.</p>',
+          after:'<h4>After an Earthquake</h4><ul><li>Check yourself and others for injuries.</li><li>Be prepared for aftershocks.</li><li>Check for gas leaks, electrical damage, and fire hazards.</li><li>Listen to the radio or authorities for information and instructions.</li></ul>'
+      }},
+      {id:'flood', title:'Flood Preparedness', summary:'How to prepare and respond during floods.', content:{
+          before:'<h4>Before a Flood</h4><ul><li>Know your area\'s flood risk and evacuation routes.</li><li>Elevate critical utilities, such as electrical panels and water heaters.</li><li>Place important documents in a waterproof container.</li><li>Assemble a "go bag" with essentials in case you need to evacuate.</li></ul>',
+          during:'<h4>During a Flood</h4><ul><li>Move to higher ground immediately.</li><li>Do not walk, swim, or drive through floodwaters. Just six inches of moving water can knock you down.</li><li>Listen to emergency alerts and follow evacuation orders.</li></ul>',
+          after:'<h4>After a Flood</h4><ul><li>Return home only when authorities declare it is safe.</li><li>Avoid contact with floodwater as it can be contaminated.</li><li>Clean and disinfect everything that got wet.</li><li>Document any property damage with photos.</li></ul>'
+      }},
+      {id:'fire', title:'Fire & Evacuation', summary:'Fire safety, stop-drop-and-roll, evacuation basics.', content:{
+          before:'<h4>Before a Fire</h4><ul><li>Install smoke alarms on every level of your home and test them monthly.</li><li>Create and practice a fire escape plan with two ways out of every room.</li><li>Keep flammable items away from heat sources.</li></ul>',
+          during:'<h4>During a Fire</h4><ul><li>If your escape route is blocked, stay in a room with the door closed and signal for help.</li><li>Crawl low under smoke to escape.</li><li>If your clothes catch fire, <strong>Stop, Drop, and Roll</strong>.</li></ul>',
+          after:'<h4>After a Fire</h4><ul><li>Once you are out, stay out. Never go back into a burning building.</li><li>Go to your designated meeting place.</li><li>Call for help from a safe location.</li></ul>'
+      }}
+    ];
+
+    const ARTICLES = [
+        {id:'kit', title:'Building an Emergency Kit', content:'A comprehensive emergency kit should last for at least 72 hours. Key items include: Water (1 gallon per person per day), non-perishable food, flashlight, extra batteries, first aid kit, whistle, dust mask, sanitation items, and copies of personal documents.'},
+        {id:'evac', title:'School Evacuation Best Practices', content:'Schools must have clear, well-practiced evacuation plans. Drills should be conducted regularly. Routes should be clearly marked, and staff must be trained to assist all students, including those with disabilities. A designated safe assembly point is crucial.'},
+        {id:'earthquake-info', title:'Understanding Earthquakes', content:'Earthquakes are the shaking of the surface of the Earth resulting from a sudden release of energy in the Earth\'s lithosphere that creates seismic waves. They are caused by tectonic plates getting stuck and putting a strain on the ground, which is then released.'},
+        {id:'flood-info', title:'Understanding Floods', content:'A flood is an overflow of water that submerges land that is usually dry. They are often caused by heavy rainfall, rapid snowmelt, or a storm surge from a tropical cyclone or tsunami in coastal areas. Flash floods are particularly dangerous because they combine the destructive power of a flood with incredible speed.'},
+        {id:'firstaid', title:'Basic First Aid Tips', content:'Key first aid skills include the 3 Cs: Check the scene for safety, Call for help, and Care for the person. Learn how to control bleeding with direct pressure, recognize signs of shock, and perform CPR. These skills can save a life while waiting for emergency services.'}
+    ];
+
+    const QUIZ = [
+      {q:'What is the safest action during an earthquake?', choices:['Run outside immediately','Drop, Cover & Hold On','Stand in a doorway','Keep using elevator'], a:1},
+      {q:'During a flood, you should:', choices:['Drive through a flooded road','Move to a lower level of a building','Move to higher ground','Swim to find help'], a:2},
+      {q:'If your clothing catches fire, you should:', choices:['Run as fast as you can','Stop, Drop & Roll','Jump up and down','Pour water on yourself'], a:1}
+    ];
+
+    /* ---------- STORAGE & STATE ---------- */
+    const LS_USERS = 'dm_users';
+    const LS_PROGRESS = 'dm_progress';
+    const LS_SCORES = 'dm_scores';
+    const LS_ALERTS = 'dm_alerts';
+    const LS_BROADCAST = 'dm_broadcast';
+    let currentUser = null;
+    let alertInterval = null;
+
+    function read(key){ try{return JSON.parse(localStorage.getItem(key))||{}}catch(e){return{}} }
+    function write(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+    /* ---------- AUTH & ROLES ---------- */
+    const authForm = document.getElementById('authForm');
+    const toggleAuth = document.getElementById('toggleAuth');
+    const authTitle = document.getElementById('authTitle');
+    const nameField = document.getElementById('nameField');
+    const roleField = document.getElementById('roleField');
+    let isRegister = false;
+
+    toggleAuth.addEventListener('click',()=>{
+      isRegister = !isRegister;
+      authTitle.textContent = isRegister? 'Register':'Login';
+      nameField.style.display = isRegister? 'block':'none';
+      roleField.style.display = isRegister? 'block':'none';
+      toggleAuth.textContent = isRegister? 'Switch to Login':'Switch to Register';
+    });
+
+    authForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      const pwd = document.getElementById('password').value.trim();
+      if(isRegister){
+        const fullname = document.getElementById('fullname').value.trim() || email.split('@')[0];
+        const role = document.getElementById('role').value || 'student';
+        const users = read(LS_USERS);
+        if(users[email]) return toast('User already exists. Please login.');
+        users[email] = {name:fullname,email,role,password:pwd,created:Date.now(),_badges:[]};
+        write(LS_USERS,users);
+        toast('Registered! You can now login.');
+        isRegister=false; toggleAuth.click();
+        authForm.reset();
+        return;
+      }
+      const users = read(LS_USERS);
+      const u = users[email];
+      if(!u||u.password!==pwd) return toast('Invalid credentials');
+      currentUser = u; sessionStorage.setItem('dm_current', email);
+      document.getElementById('logoutBtn').style.display='inline-block';
+      document.getElementById('loggedAs').textContent = `Signed in as ${currentUser.name}`;
+
+      // --- ROLE-BASED REDIRECT ---
+      if (currentUser.role === 'teacher') {
+        showPage('teacher-dashboard');
+        renderTeacherDashboard();
+      } else {
+        showPage('dashboard');
+        renderDashboard();
+        startAlertListener(); // Start listening for teacher alerts
+      }
+      renderProfile();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{
+      currentUser = null; sessionStorage.removeItem('dm_current');
+      document.getElementById('logoutBtn').style.display='none';
+      document.getElementById('loggedAs').textContent='';
+      if(alertInterval) clearInterval(alertInterval); // Stop listener on logout
+      showPage('login');
+    });
+
+    (function trySession(){
+      const email = sessionStorage.getItem('dm_current');
+      if(!email) return;
+      const users = read(LS_USERS);
+      if(users[email]){
+        currentUser = users[email];
+        document.getElementById('logoutBtn').style.display='inline-block';
+        document.getElementById('loggedAs').textContent = `Signed in as ${currentUser.name}`;
+        if (currentUser.role === 'teacher') {
+          showPage('teacher-dashboard');
+          renderTeacherDashboard();
+        } else {
+          showPage('dashboard');
+          renderDashboard();
+          startAlertListener();
+        }
+        renderProfile();
+      }
+    })();
+
+    /* ---------- NAVIGATION ---------- */
+    function showPage(key){
+      document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+      document.getElementById('page-'+key).classList.add('active');
+      window.location.hash = key;
+    }
+    document.querySelectorAll('.tile').forEach(t=>t.addEventListener('click', ()=>{
+      const nav=t.dataset.nav; showPage(nav);
+      if(nav==='modules') renderModules(); if(nav==='map') initMap(); if(nav==='quiz') renderQuiz(); if(nav==='game') stopGame(); if(nav==='knowledge') renderKB();
+    }));
+
+    /* ---------- TEACHER FEATURES ---------- */
+    function renderTeacherDashboard() {
+        const studentListEl = document.getElementById('studentList');
+        studentListEl.innerHTML = '';
+        const allUsers = read(LS_USERS);
+        const allAlerts = read(LS_ALERTS);
+
+        Object.values(allUsers).filter(u => u.role === 'student').forEach(student => {
+            const card = document.createElement('div');
+            card.className = 'student-card';
+
+            const progress = calculateProgress(student.email);
+            const studentAlerts = allAlerts[student.email] || [];
+            const lastAlert = studentAlerts.length > 0 ? studentAlerts[studentAlerts.length - 1] : null;
+
+            let locationInfo = 'No location reported.';
+            if(lastAlert) {
+                locationInfo = `Last seen: <a href="#map?lat=${lastAlert.lat}&lng=${lastAlert.lng}" onclick="showStudentOnMap(${lastAlert.lat}, ${lastAlert.lng})">${lastAlert.lat.toFixed(4)}, ${lastAlert.lng.toFixed(4)}</a> at ${new Date(lastAlert.ts).toLocaleTimeString()}`;
+            }
+
+            card.innerHTML = `
+                <h4>${student.name} (${student.email})</h4>
+                <div style="margin:8px 0;"><strong>Readiness:</strong> ${progress}%</div>
+                <div style="margin:8px 0;font-size:13px;color:var(--muted);">${locationInfo}</div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <input type="text" id="badge-for-${student.email.replace(/[@.]/g, '')}" placeholder="Badge name (e.g., 'Team Player')" style="padding:6px; flex:1;">
+                    <button class="btn small" data-email="${student.email}">Award Badge</button>
+                </div>
+            `;
+            studentListEl.appendChild(card);
+        });
+
+        studentListEl.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const studentEmail = btn.dataset.email;
+                const inputEl = document.getElementById(`badge-for-${studentEmail.replace(/[@.]/g, '')}`);
+                const badgeName = inputEl.value.trim();
+                if(badgeName) {
+                    awardBadge(badgeName, studentEmail);
+                    inputEl.value = '';
+                } else {
+                    toast('Please enter a badge name.', 'danger');
+                }
+            });
+        });
+    }
+    window.showStudentOnMap = (lat, lng) => {
+        showPage('map');
+        initMap();
+        setTimeout(() => mapObj.setView([lat, lng], 15), 200); // Delay to ensure map is initialized
+    };
+
+    document.getElementById('sendAlertBtn').addEventListener('click', () => {
+        const msg = document.getElementById('teacherAlertMsg').value.trim();
+        if(!msg) return toast('Please enter a message to send.');
+        const alertPayload = { msg, ts: Date.now() };
+        write(LS_BROADCAST, alertPayload);
+        toast('Alert sent to all students!', 'success');
+        document.getElementById('teacherAlertMsg').value = '';
+    });
+
+    /* ---------- STUDENT ALERT LISTENER ---------- */
+    function startAlertListener() {
+        if(alertInterval) clearInterval(alertInterval);
+        let lastSeenAlert = JSON.parse(sessionStorage.getItem('dm_last_alert_ts') || '0');
+        alertInterval = setInterval(() => {
+            const broadcast = read(LS_BROADCAST);
+            if(broadcast && broadcast.ts > lastSeenAlert) {
+                toast(`ALERT: ${broadcast.msg}`, 10000);
+                lastSeenAlert = broadcast.ts;
+                sessionStorage.setItem('dm_last_alert_ts', lastSeenAlert);
+            }
+        }, 5000); // Check every 5 seconds
+    }
+
+
+    /* ---------- MODULES & KNOWLEDGE BASE (ENHANCED) ---------- */
+    function renderModules(){
+      const out = document.getElementById('modulesList'); out.innerHTML='';
+      const prog = read(LS_PROGRESS)[currentUser?.email]||{};
+      MODULES.forEach(m=>{
+        const div = document.createElement('div'); div.className='module-card';
+        div.innerHTML = `<h4>${m.title}</h4><p style="font-size:14px; color:var(--muted)">${m.summary}</p><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><button class='btn' data-id='${m.id}'>Open</button><div style='color:${prog[m.id]?"var(--success)":"var(--muted)"}'>${prog[m.id]? '✔ Completed':'Not started'}</div></div>`;
+        out.appendChild(div);
+      });
+      out.querySelectorAll('button').forEach(b=>b.addEventListener('click',(e)=>{ const id=e.target.dataset.id; showModuleDetail(id); }));
+    }
+    function showModuleDetail(id){
+      const m = MODULES.find(x=>x.id===id); if(!m) return;
+      const detail = document.getElementById('moduleDetail');
+      detail.innerHTML = `<div style='background:var(--card);padding:14px;border-radius:10px'><h3>${m.title}</h3><hr>${m.content.before}${m.content.during}${m.content.after}<div style='margin-top:14px;display:flex;gap:8px'><button class='btn' id='completeModule'>Mark as Complete</button><button class='btn secondary' id='closeModule'>Close</button></div></div>`;
+      document.getElementById('closeModule').addEventListener('click', ()=>{ detail.innerHTML=''; });
+      document.getElementById('completeModule').addEventListener('click', ()=>{
+        const prog = read(LS_PROGRESS);
+        prog[currentUser.email] = prog[currentUser.email]||{}; prog[currentUser.email][id]=true; write(LS_PROGRESS,prog); toast('Module marked complete!'); renderDashboard(); renderProfile(); renderModules(); detail.innerHTML = '';
+      });
+    }
+
+    function renderKB(filter=''){
+      const out = document.getElementById('kbList'); out.innerHTML='';
+      const q = filter.toLowerCase();
+      ARTICLES.filter(a=>a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q)).forEach(a=>{
+        const div = document.createElement('div'); div.className='kb-item';
+        div.innerHTML = `<h4>${a.title}</h4><p style='color:var(--muted);font-size:14px'>${a.content.substring(0,80)}...</p><button class='btn small' data-id='${a.id}'>Read More</button>`;
+        out.appendChild(div);
+      });
+      out.querySelectorAll('button').forEach(b=>b.addEventListener('click',(e)=>{ const id=e.target.dataset.id; openArticle(id); }));
+    }
+    function openArticle(id){
+      const a = ARTICLES.find(x=>x.id===id); if(!a) return;
+      const html = `<div style='background:var(--card);padding:14px;border-radius:10px'><h3>${a.title}</h3><hr><p style='margin-top:10px'>${a.content}</p><div style='margin-top:10px'><button class='btn' id='closeArt'>Close</button></div></div>`;
+      const out=document.getElementById('kbList'); out.innerHTML=html; document.getElementById('closeArt').addEventListener('click', ()=>renderKB(document.getElementById('kbSearch').value));
+    }
+    document.getElementById('kbSearch').addEventListener('input',(e)=>renderKB(e.target.value));
+    document.getElementById('downloadPoster').addEventListener('click', ()=>{
+        const text = "Emergency Kit:\n- Water (1 gallon per person per day)\n- Non-perishable food (3-day supply)\n- Flashlight & extra batteries\n- First-aid kit\n- Whistle to signal for help\n- Copies of important documents";
+        const blob = new Blob([text],{type:'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'emergency-poster.txt'; a.click(); URL.revokeObjectURL(url); a.remove();
+    });
+
+
+    /* ---------- QUIZ ---------- */
+    function renderQuiz(){
+      const out = document.getElementById('quizArea'); out.innerHTML='';
+      const form = document.createElement('form'); let html=''; QUIZ.forEach((q,i)=>{
+        html += `<div class='question'><strong>Q${i+1}.</strong> ${q.q}<div style='margin-top:6px'>`;
+        q.choices.forEach((c,ci)=> html += `<label style='display:block;margin:6px 0'><input type='radio' name='q${i}' value='${ci}' required> ${c}</label>`);
+        html += `</div></div>`;
+      });
+      html += `<div style='display:flex;gap:8px'><button class='btn' type='submit'>Submit</button><button class='btn secondary' type='button' id='resetQuiz'>Reset</button></div>`;
+      form.innerHTML = html; out.appendChild(form);
+      form.addEventListener('submit',(e)=>{ e.preventDefault(); const data = new FormData(form); let score=0; QUIZ.forEach((q,i)=>{ const ans = parseInt(data.get('q'+i),10); if(ans===q.a) score++; }); const pct = Math.round(score/QUIZ.length*100); toast(`You scored ${score}/${QUIZ.length} (${pct}%)`); saveScore(pct); renderProfile(); if(pct>=80) awardBadge('Quiz Whiz'); });
+      document.getElementById('resetQuiz').addEventListener('click', ()=>{ form.reset(); });
+    }
+    function saveScore(pct){ const S = read(LS_SCORES); S[currentUser.email] = pct; write(LS_SCORES,S); }
+
+
+    /* ---------- GAME (canvas) ---------- */
+    // This section remains unchanged as it was not part of the update request.
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d'); let gameState = null;
+    function resetCanvasSize(){ canvas.width = canvas.clientWidth; canvas.height = 400; }
+    window.addEventListener('resize', resetCanvasSize);
+    function startGame(){ resetCanvasSize(); gameState = {player:{x:40,y:200,r:10}, obstacles:[], time:30, running:true}; spawnObstacles(); requestAnimationFrame(gameLoop); document.getElementById('gameInfo').textContent=`Time: 30s`; }
+    function stopGame(){ gameState = null; drawIdle(); }
+    function spawnObstacles(){ for(let i=0;i<8;i++){ gameState.obstacles.push({x:Math.random()*canvas.width, y:-Math.random()*800, w:20+Math.random()*30, h:20+Math.random()*30, speed:1+Math.random()*2}); } }
+    function gameLoop(ts){ if(!gameState||!gameState.running) return;
+        gameState.obstacles.forEach(o=>{ o.y += o.speed; if(o.y>canvas.height){ o.y = -Math.random()*300; o.x = Math.random()*canvas.width; } });
+        if(!gameState.lastTs) gameState.lastTs=ts; if(ts-gameState.lastTs>1000){ gameState.time--; gameState.lastTs=ts; document.getElementById('gameInfo').textContent = `Time: ${gameState.time}s`; }
+        if(gameState.time<=0){ endGame(false); return; }
+        for(const o of gameState.obstacles){ if(circleRectCollide(gameState.player,o)){ endGame(false); return; } }
+        if(gameState.player.x > canvas.width * 0.85){ endGame(true); return; }
+        drawGame(); requestAnimationFrame(gameLoop);
+    }
+    function drawIdle(){ resetCanvasSize(); ctx.fillStyle='#eee'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle='var(--muted)'; ctx.fillText('Press Start to play',20,40); }
+    function drawGame(){ ctx.clearRect(0,0,canvas.width,canvas.height); const sw = canvas.width*0.15; ctx.fillStyle='rgba(42,157,143,0.12)'; ctx.fillRect(canvas.width-sw,0,sw,canvas.height);
+        ctx.fillStyle='#a00'; gameState.obstacles.forEach(o=> ctx.fillRect(o.x,o.y,o.w,o.h));
+        ctx.beginPath(); ctx.arc(gameState.player.x,gameState.player.y,gameState.player.r,0,Math.PI*2); ctx.fillStyle='#0f172a'; ctx.fill();
+    }
+    function circleRectCollide(c,r){ const distX = Math.abs(c.x-r.x-r.w/2); const distY = Math.abs(c.y-r.y-r.h/2); if(distX > (r.w/2+c.r)||distY > (r.h/2+c.r)) return false; if(distX <= (r.w/2)||distY <= (r.h/2)) return true; const dx=distX-r.w/2; const dy=distY-r.h/2; return (dx*dx+dy*dy<=(c.r*c.r));}
+    window.addEventListener('keydown',(e)=>{ if(!gameState||!gameState.running) return; const step=12; if(e.key==='ArrowLeft') gameState.player.x=Math.max(10,gameState.player.x-step); if(e.key==='ArrowRight') gameState.player.x=Math.min(canvas.width-10,gameState.player.x+step); if(e.key==='ArrowUp') gameState.player.y=Math.max(10,gameState.player.y-step); if(e.key==='ArrowDown') gameState.player.y=Math.min(390,gameState.player.y+step); });
+    function endGame(success){ if(!gameState) return; gameState.running=false; if(success){ toast('Success! You reached the safe zone.'); awardBadge('Survivor'); } else { toast('You failed the drill. Try again!'); } document.getElementById('gameInfo').textContent = success? 'Success!':'Failed'; }
+    document.getElementById('startGame').addEventListener('click', ()=>{ if(!currentUser) return toast('Please login'); startGame(); });
+
+
+    
+    /* ---------- MAP & PANIC (ENHANCED) ---------- */
+    
+document.addEventListener('DOMContentLoaded', () => {
+  // small toast helper (non-blocking)
+  function toast(msg, type='info', time=3500) {
+    const containerId = '__dm_toast_container';
+    let c = document.getElementById(containerId);
+    if(!c) { c = document.createElement('div'); c.id = containerId;
+             c.style.position = 'fixed'; c.style.right = '18px'; c.style.bottom = '18px';
+             c.style.zIndex = 99999; c.style.display = 'flex'; c.style.flexDirection = 'column';
+             c.style.gap = '8px'; document.body.appendChild(c);
+    }
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.padding = '10px 12px'; el.style.borderRadius = '8px'; el.style.color = '#fff';
+    el.style.boxShadow = '0 6px 18px rgba(2,6,23,0.15)';
+    el.style.background = type === 'danger' ? '#e63946' : '#111';
+    c.appendChild(el);
+    setTimeout(()=>el.remove(), time);
+  }
+
+  // Check Leaflet is available
+  if(typeof L === 'undefined') {
+    console.error('Leaflet (L) is not loaded. Make sure you included the Leaflet script before this script.');
+    toast('Leaflet not loaded. Check console.', 'danger', 6000);
+    return;
+  }
+  
+
+  const mapEl = document.getElementById('map');
+  const locateBtn = document.getElementById('locateBtn');
+  const panicBtn = document.getElementById('panicBtn');
+
+  if(!mapEl || !locateBtn || !panicBtn) {
+    console.error('Required DOM elements missing:', { mapEl, locateBtn, panicBtn });
+    toast('Map or buttons not found in DOM. Check element IDs.', 'danger', 6000);
+    return;
+  }
+
+  let mapObj = null;
+  let userMarker = null;
+  const safeLocations = [
+    { lat: 11.0168, lng: 76.9558, name: "City Community Hall" },
+    { lat: 11.0250, lng: 76.9650, name: "North School Gymnasium" },
+    { lat: 11.0055, lng: 76.9455, name: "South District Stadium" }
+  ];
+
+  function initMap() {
+    if(mapObj) return;
+    mapObj = L.map('map').setView([11.0168, 76.9558], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapObj);
+
+    // add safe markers
+    safeLocations.forEach(loc => {
+      L.marker([loc.lat, loc.lng], {
+        icon: L.icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+          iconSize: [25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]
+        })
+      }).addTo(mapObj).bindPopup(`<b>Safe Shelter:</b><br>${loc.name}`);
+    });
+  }
+
+  // helper to ensure map renders correctly when container was hidden
+  function ensureMapReady() {
+    initMap();
+    // Leaflet often needs invalidateSize() if the map element was hidden when initialized
+    setTimeout(()=>{ try { mapObj.invalidateSize(); } catch(e){} }, 200);
+  }
+
+  // Attach locate click
+  locateBtn.addEventListener('click', () => {
+    ensureMapReady();
+
+    if(!navigator.geolocation) {
+      toast('Geolocation not supported by your browser.', 'danger');
+      return;
+    }
+
+    // UI feedback while locating
+    locateBtn.disabled = true;
+    const oldText = locateBtn.textContent;
+    locateBtn.textContent = 'Locating…';
+
+    navigator.geolocation.getCurrentPosition(position => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      if(!mapObj) initMap();
+      mapObj.setView([lat, lng], 14);
+
+      if(userMarker) {
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        userMarker = L.marker([lat, lng], {
+          icon: L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]
+          })
+        }).addTo(mapObj).bindPopup('You are here').openPopup();
+      }
+
+      toast('Your location was updated on the map.');
+      locateBtn.disabled = false;
+      locateBtn.textContent = oldText;
+
+      // open popup after a short delay to make sure the map has sized
+      setTimeout(()=>{ try { if(userMarker) userMarker.openPopup(); } catch(e) {} }, 300);
+    }, err => {
+      console.error('Geolocation error:', err);
+      let msg = 'Unable to fetch your location.';
+      if(err && err.code === 1) msg = 'Permission denied — please allow location access.';
+      if(err && err.code === 2) msg = 'Position unavailable.';
+      if(err && err.code === 3) msg = 'Location request timed out.';
+      toast(msg, 'danger', 5000);
+      locateBtn.disabled = false;
+      locateBtn.textContent = oldText;
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  });
+
+  // Panic button — demo: log details and show toast
+  panicBtn.addEventListener('click', () => {
+    ensureMapReady();
+    if(!navigator.geolocation) {
+      toast('Geolocation not supported by your browser.', 'danger');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(position => {
+      const payload = { lat: position.coords.latitude, lng: position.coords.longitude, ts: Date.now() };
+      // demo: store to localStorage (if you want), or send to server
+      try {
+        const alerts = JSON.parse(localStorage.getItem('dm_alerts_demo') || '{}');
+        const userKey = 'demo_user';
+        alerts[userKey] = alerts[userKey] || [];
+        alerts[userKey].push(payload);
+        localStorage.setItem('dm_alerts_demo', JSON.stringify(alerts));
+      } catch(e){ console.warn('Could not write alerts to localStorage', e); }
+
+      console.log('PANIC alert payload (demo):', payload);
+      toast('🚨 Panic alert sent (demo)', 'danger', 4000);
+    }, err => {
+      console.error('Panic: geolocation error', err);
+      toast('Unable to get location for panic alert.', 'danger', 4000);
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  });
+
+  // If your app changes pages by hash (window.location.hash) make sure to invalidate map when the map page is shown
+  window.addEventListener('hashchange', () => {
+    if(location.hash && location.hash.includes('map')) {
+      if(mapObj) setTimeout(()=>mapObj.invalidateSize(), 200);
+      else ensureMapReady();
+    }
+  });
+
+  // If map page might be visible initially, init it (safe)
+  if(location.hash && location.hash.includes('map')) ensureMapReady();
+
+  // Also call ensureMapReady once in case your app shows map by default
+  // (this won't re-init if mapObj already exists)
+  setTimeout(()=>ensureMapReady(), 300);
+});
+
+
+ 
+    /* ---------- PROFILE & PROGRESS ---------- */
+    function calculateProgress(userEmail) {
+        const prog = read(LS_PROGRESS)[userEmail]||{};
+        const modulesDone = Object.keys(prog).filter(k=>prog[k]).length;
+        const modulesPct = Math.round(modulesDone / MODULES.length * 100);
+        const quizScore = read(LS_SCORES)[userEmail] || 0;
+        const gameWin = JSON.parse(localStorage.getItem('dm_game_'+userEmail) || 'null');
+        const gamePct = (gameWin && gameWin.win) ? 100 : 0;
+        return Math.round((modulesPct*0.6) + (quizScore*0.25) + (gamePct*0.15));
+    }
+
+    function renderProfile(){
+        if(!currentUser) return;
+        document.getElementById('profileName').textContent = currentUser.name;
+        document.getElementById('profileEmail').textContent = currentUser.email;
+        document.getElementById('profileRole').textContent = currentUser.role;
+
+        const total = calculateProgress(currentUser.email);
+        document.getElementById('profileProgress').style.width = total + '%';
+        document.getElementById('profileScoreText').textContent = total + '% ready';
+        document.getElementById('progressFill').style.width = total + '%';
+        document.getElementById('progressText').textContent = total + '%';
+
+        const bEl = document.getElementById('badges'); bEl.innerHTML = '';
+        const users = read(LS_USERS);
+        const userBadges = users[currentUser.email]._badges || [];
+        if(userBadges.length === 0) { bEl.textContent = 'No badges yet.'; }
+        userBadges.forEach(b=>{
+            const el = document.createElement('div');
+            el.style.padding='6px 10px'; el.style.background='var(--bg)'; el.style.border='1px solid #e6eef8'; el.style.borderRadius='8px'; el.textContent=b; bEl.appendChild(el);
+        });
+    }
+
+    function renderDashboard(){ if(currentUser?.role === 'student') renderProfile(); }
+
+    function awardBadge(name, userEmail = currentUser.email){
+        const users = read(LS_USERS);
+        const u = users[userEmail];
+        if(!u) return;
+        u._badges = u._badges || [];
+        if(!u._badges.includes(name)) {
+            u._badges.push(name);
+            write(LS_USERS,users);
+            toast(`Badge awarded to ${u.name}: ${name}`);
+            if(currentUser.role === 'teacher') renderTeacherDashboard();
+            if(currentUser.email === userEmail) renderProfile();
+        } else {
+            toast(`${u.name} already has the '${name}' badge.`);
+        }
+    }
+
+    /* ---------- TOASTS & INIT ---------- */
+    function toast(msg, type='info', timeout=3500){
+      const c=document.getElementById('toasts'); const el = document.createElement('div'); el.className='toast'; el.textContent = msg;
+      if(type === 'danger') el.style.background = 'var(--danger)'; el.style.color = '#fff';
+      c.appendChild(el); setTimeout(()=>{ el.remove(); }, timeout);
+    }
+
+    renderKB(''); drawIdle();
+  })();
+  </script>
